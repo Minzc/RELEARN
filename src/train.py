@@ -23,6 +23,7 @@ from src.utils import print_config, save_checkpoint, save_embedding, construct_f
 from src.models import GCNDecoder, MLP
 from src.dataset import Dataset, EvaDataset
 from src.logger import myLogger
+import tqdm
 
 
 def parse_args():
@@ -125,12 +126,24 @@ def evaluate(args, embedding, logger, repeat_times=5):
     best_train_accs, best_test_accs = [], []
     best_train_acc_epochs, best_test_acc_epochs = [], []
     if args.use_superv:
+        # Have supervision on VAE, the training data is fixed
         train = construct_feature(args.train, embedding)
         test = construct_feature(args.test, embedding)
     else:
+        # No supervision on VAE, the training data is not fixed
         data = construct_feature(args.label_data, embedding)
         split = int(len(args.label_data) / repeat_times)
 
+        with open(f"data/{args.dataset}/edge_embeddings.txt", "w") as w:
+            for word1, word2, label in data:
+                vector1 = embedding[word1]
+                vector2 = embedding[word2]
+                embed = np.concatenate([vector1, vector2]).tolist()
+                record = {"x": embed, "y": label, "w_1": word1, "w_2": word2}
+                w.write(f"{json.dumps(record)}\n")
+            print(f"Edge embeddings are stored in data/{args.dataset}/edge_embeddings.txt")
+
+    # repeat 5 times
     for i in range(repeat_times):
         if not args.use_superv:
             p1, p2 = i*split, (i+1)*split
@@ -156,6 +169,7 @@ def evaluate(args, embedding, logger, repeat_times=5):
         best_test_acc, best_train_acc = 0, 0
         best_test_acc_epoch, best_train_acc_epoch = 0, 0
         count = 0
+        # 1000 iterations for MLP model
         for epoch in range(args.epochs_eval):
             for i, (batch, label) in enumerate(dataloader):
                 optimizer.zero_grad()
@@ -229,7 +243,7 @@ def train(args, embedding, Data, log_dir, logger, writer=None):
     count = 0
     model.train()
 
-    for epoch in range(1, args.epochs+1):
+    for epoch in tqdm.tqdm(range(1, args.epochs+1), desc="Train Embedding"):
         losses = []
         for mode in args.modes:
             optimizer.zero_grad()
@@ -323,7 +337,8 @@ if __name__ == '__main__':
     # print('Number CUDA Devices:', torch.cuda.device_count())
     # call(["nvidia-smi", "--format=csv", "--query-gpu=index,name,driver_version,memory.total,memory.used,memory.free"])
     # torch.cuda.device(args.gpu)
-    args.device = torch.device("cuda:{}".format(args.gpu) if torch.cuda.is_available() and args.gpu > -1 else "cpu")
+    # args.device = torch.device("cuda:{}".format(args.gpu) if torch.cuda.is_available() and args.gpu > -1 else "cpu")
+    args.device = "cpu"
     # print('Active CUDA Device: GPU', torch.cuda.current_device())
     # np.random.seed(args.seed)
     # torch.manual_seed(args.seed)
