@@ -382,7 +382,8 @@ if __name__ == '__main__':
     # print('Number CUDA Devices:', torch.cuda.device_count())
     # call(["nvidia-smi", "--format=csv", "--query-gpu=index,name,driver_version,memory.total,memory.used,memory.free"])
     # torch.cuda.device(args.gpu)
-    args.device = torch.device("cuda:{}".format(args.gpu) if torch.cuda.is_available() and args.gpu > -1 else "cpu")
+    # args.device = torch.device("cuda:{}".format(args.gpu) if torch.cuda.is_available() and args.gpu > -1 else "cpu")
+    args.device = "cpu"
     # print('Active CUDA Device: GPU', torch.cuda.current_device())
     # np.random.seed(args.seed)
     # torch.manual_seed(args.seed)
@@ -419,6 +420,6 @@ if __name__ == '__main__':
     tmp_args = copy.deepcopy(args)
 
     for train_index, test_index in kf.split(labeled_data):
-        args = tmp_args
+        args = copy.deepcopy(tmp_args)
         accuracies = main(train_index, test_index, accuracies)
     print("Final Average {}".format(np.mean(accuracies)))
