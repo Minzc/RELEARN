@@ -76,16 +76,17 @@ def load_data(path="data/dblp-sub/", dataset="dblp", diffusion_threshold=10, fro
     with open((path + "features.p"), 'rb') as feature_file:
         # 23417 * 300
         features = pkl.load(feature_file)
-        print("Feature", features.shape)
-        print(features)
-        print(type(features))
+        features = features.astype("float64")
+        # print("Feature", features.shape)
+        # print(features)
+        # print(type(features), features.dtype)
     # features = sp.csr_matrix(normalize(features))
 
     with open((path + "affinity_matrix.p"), 'rb') as adj_file:
         # (23417, 23417), scipy.sparse.csr.csr_matrix
         adj = pkl.load(adj_file)
-        print(adj)
-        print("Adj", adj.shape, type(adj))
+        # print(adj)
+        # print("Adj", adj.shape, type(adj))
 
     with open((path + "graph.p"), 'rb') as graph_file:
         # Key: value list
@@ -95,7 +96,7 @@ def load_data(path="data/dblp-sub/", dataset="dblp", diffusion_threshold=10, fro
         with open((path + 'diffusion.p'), 'rb') as diff_file:
             diffusion = pkl.load(diff_file)
             # diff_graph, diff_content
-            print(list(diffusion.values())[0])
+            # print(list(diffusion.values())[0])
     else:
         diffusion = None
 
@@ -110,7 +111,8 @@ def load_data(path="data/dblp-sub/", dataset="dblp", diffusion_threshold=10, fro
 
     feature_sum = np.sum(features, axis=1)
     nonzero_nodes = np.nonzero(feature_sum)[0]
-    print("total nonzero features in utils:", len(nonzero_nodes))
+    print("total nonzero features in utils:", len(nonzero_nodes), type(features))
+    # print(features)
     features = normalize(features)
     features = sp.csr_matrix(features)
 
@@ -146,6 +148,7 @@ def load_data(path="data/dblp-sub/", dataset="dblp", diffusion_threshold=10, fro
 def normalize(mx):
     """Row-normalize sparse matrix"""
     rowsum = np.array(mx.sum(1))
+    print(rowsum)
     r_inv = np.power(rowsum, -1).flatten()
     r_inv[np.isinf(r_inv)] = 0.
     r_mat_inv = sp.diags(r_inv)
@@ -190,4 +193,5 @@ def sparse_to_tuple(sparse_mx):
     return sparse_mx
 
 if __name__ == '__main__':
-    load_data(path="../data/amazon/", dataset="amazon")
+    load_data(path="data/amazon/", dataset="amazon")
+    # load_data()
