@@ -49,6 +49,7 @@ graph = defaultdict(list)
 rows = []
 columns = []
 data = []
+
 with open("data/amazon/train.txt") as f:
     for ln in f:
         lnsegs = ln.strip().split(" ")
@@ -72,6 +73,15 @@ with open("data/amazon/link.csv", "w") as w:
         w.write(f"{u_id},{i_id}\n")
 
 # =================
+# rel.txt
+# =================
+with open("data/amazon/eval/rel.txt", "w") as w, open("data/amazon/rate_train.txt") as f:
+    for ln in f:
+        u_id, i_id, rating = ln.strip().split("\t")
+        u_id, i_id = int(u_id), int(i_id)
+        w.write(f"{u_id}\t{item_remap[i_id]}\t{rating}\n")
+
+# =================
 # affinity_matrix.p
 # =================
 affinity_matrix = csr_matrix((data, (numpy.array(rows), numpy.array(columns))),
@@ -82,3 +92,5 @@ pickle.dump(affinity_matrix, open("data/amazon/affinity_matrix.p", "wb"))
 # graph.p
 # =================
 pickle.dump(graph, open("data/amazon/graph.p", "wb"))
+
+
