@@ -1,6 +1,7 @@
 from __future__ import division
 from __future__ import print_function
 
+import copy
 import os, sys
 import numpy as np
 from datetime import datetime
@@ -262,6 +263,7 @@ def train(args, embedding, Data, log_dir, logger, writer=None):
             learned_embed = gensim.models.keyedvectors.Word2VecKeyedVectors(Data.feature_len)
             embedding = model.embedding(torch.LongTensor(args.nodes).to(args.device)).data.cpu().numpy()
             learned_embed.add([str(node) for node in args.nodes], embedding)
+
             train_acc, test_acc, std = evaluate(args, learned_embed, logger, repeat_times=1)
             duration = time.time() - t
             logger.info('Epoch: {:04d} '.format(epoch)+
@@ -323,6 +325,57 @@ def balance_label(labeled_data):
         labeled_data.append((data1, data2, 2))
     return labeled_data
 
+def main(train_index, test_index, accuracies):
+    if args.use_superv:
+        args.relation = len(labels)
+        args.test = [labeled_data[i] for i in test_index]
+        args.train = [labeled_data[i] for i in train_index]
+    print("Train", len(args.train), "Test", len(args.test))
+
+    Data = Dataset(args, args.dataset)
+    args.feature_len = Data.feature_len
+    args.content_len = Data.content_len
+    args.num_node, args.num_link, args.num_diffusion = Data.num_node, Data.num_link, Data.num_diff
+
+    # initialize logger
+    comment = f'_{args.dataset}_{args.suffix}'
+    current_time = datetime.now().strftime('%b_%d_%H-%M-%S')
+    if args.prefix:
+        base = os.path.join('running_log', args.prefix)
+        log_dir = os.path.join(base, args.suffix)
+    else:
+        log_dir = os.path.join('running_log', current_time + comment)
+    args.log_dir = log_dir
+    if not os.path.exists(log_dir): os.makedirs(log_dir)
+    logger = myLogger(name='exp', log_path=os.path.join(log_dir, 'log.txt'))
+    writer = SummaryWriter(log_dir=log_dir)
+    writer.add_text('Parameters', str(vars(args)))
+    print_config(args, logger)
+    logger.setLevel(args.log_level)
+
+    # start
+    # initial embedding by aggregating feature
+    embedding = torch.FloatTensor(Data.num_node, Data.feature_len)
+    all_nodes = list(range(Data.num_node))
+    t = time.time()
+    for i in trange(0, Data.num_node, args.sample_embed):
+        nodes = all_nodes[i:i + args.sample_embed]
+        features, adj, _ = Data.sample_subgraph(nodes, False)
+        features = features.to(args.device)
+        adj = adj.to(args.device)
+        embedding[i:i + len(nodes)] = torch.spmm(adj, features)
+    duration = time.time() - t
+    # DBLP 23417, 300
+    # Amazon 6709, 6709
+    logger.info(f'initialize embedding time {int(duration):d} Initial Feature{embedding.shape}')
+
+    # Train model
+    t_total = time.time()
+    accuracies.append(train(args, embedding, Data, args.log_dir, logger, writer))
+    logger.info("Optimization Finished!", np.mean(accuracies))
+    logger.info("Total time elapsed: {:.4f}s".format(time.time() - t_total))
+    return accuracies
+
 if __name__ == '__main__':
     # Initialize args and seed
     args = parse_args()
@@ -359,57 +412,13 @@ if __name__ == '__main__':
 
     kf = KFold(n_splits=5, random_state=2020, shuffle=True)
     accuracies = []
+    args.nodes = list(nodes)
+    args.label_data = labeled_data
+    args.output_dim = len(labels)
+
+    tmp_args = copy.deepcopy(args)
+
     for train_index, test_index in kf.split(labeled_data):
-        args.nodes = list(nodes)
-        args.label_data = labeled_data
-        args.output_dim = len(labels)
-
-        if args.use_superv:
-            args.relation = len(labels)
-            args.test = [labeled_data[i] for i in test_index]
-            args.train = [labeled_data[i] for i in train_index]
-        print("Train", len(args.train), "Test", len(args.test))
-
-        Data = Dataset(args, args.dataset)
-        args.feature_len = Data.feature_len
-        args.content_len = Data.content_len
-        args.num_node, args.num_link, args.num_diffusion = Data.num_node, Data.num_link, Data.num_diff
-
-        # initialize logger
-        comment = f'_{args.dataset}_{args.suffix}'
-        current_time = datetime.now().strftime('%b_%d_%H-%M-%S')
-        if args.prefix:
-            base = os.path.join('running_log', args.prefix)
-            log_dir = os.path.join(base, args.suffix)
-        else:
-            log_dir = os.path.join('running_log', current_time + comment)
-        args.log_dir = log_dir
-        if not os.path.exists(log_dir): os.makedirs(log_dir)
-        logger = myLogger(name='exp', log_path=os.path.join(log_dir, 'log.txt'))
-        writer = SummaryWriter(log_dir=log_dir)
-        writer.add_text('Parameters', str(vars(args)))
-        print_config(args, logger)
-        logger.setLevel(args.log_level)
-
-        # start
-        # initial embedding by aggregating feature
-        embedding = torch.FloatTensor(Data.num_node, Data.feature_len)
-        all_nodes = list(range(Data.num_node))
-        t = time.time()
-        for i in trange(0, Data.num_node, args.sample_embed):
-            nodes = all_nodes[i:i + args.sample_embed]
-            features, adj, _ = Data.sample_subgraph(nodes, False)
-            features = features.to(args.device)
-            adj = adj.to(args.device)
-            embedding[i:i + len(nodes)] = torch.spmm(adj, features)
-        duration = time.time() - t
-        # DBLP 23417, 300
-        # Amazon 6709, 6709
-        logger.info(f'initialize embedding time {int(duration):d} Initial Feature{embedding.shape}')
-
-        # Train model
-        t_total = time.time()
-        accuracies.append(train(args, embedding, Data, args.log_dir, logger, writer))
-        logger.info("Optimization Finished!", np.mean(accuracies))
-        logger.info("Total time elapsed: {:.4f}s".format(time.time() - t_total))
-    print("Final Average", np.mean(accuracies))
+        args = tmp_args
+        accuracies = main(train_index, test_index, accuracies)
+    print("Final Average {}".format(np.mean(accuracies)))
