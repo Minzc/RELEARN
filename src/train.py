@@ -135,7 +135,7 @@ def evaluate(args, embedding, logger, repeat_times=5):
         split = int(len(args.label_data) / repeat_times)
 
         with open(f"data/{args.dataset}/edge_embeddings.txt", "w") as w:
-            for word1, word2, label in data:
+            for word1, word2, label in args.label_data:
                 vector1 = embedding[word1]
                 vector2 = embedding[word2]
                 embed = np.concatenate([vector1, vector2]).tolist()
