@@ -30,7 +30,10 @@ class Dataset:
             = load_data(f'data/{dataset}/', dataset, args.diffusion_threshold)
 
         self.num_node, self.feature_len = self.features.shape
-        self.content_len = len(self.diffusion[0][1])
+        if len(self.diffusion) > 0:
+            self.content_len = len(self.diffusion[0][1])
+        else:
+            self.content_len = 0
         self.num_link = len(self.links)
         self.num_diff = len(self.diffusion)
         self.num_label = args.output_dim
