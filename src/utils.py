@@ -67,22 +67,38 @@ def encode_onehot(labels):
     return labels_onehot
 
 
-def load_data(path="data/dblp/", dataset="dblp", diffusion_threshold=10, from_text=False):
+def load_data(path="data/dblp-sub/", dataset="dblp", diffusion_threshold=10, from_text=False):
     """Load citation network dataset (cora only for now)"""
     print('Loading {} dataset...'.format(dataset))
 
     """The folloing is for DBLP dataset."""
 
     with open((path + "features.p"), 'rb') as feature_file:
+        # 23417 * 300
         features = pkl.load(feature_file)
+        print("Feature", features.shape)
+        print(features)
+        print(type(features))
     # features = sp.csr_matrix(normalize(features))
 
     with open((path + "affinity_matrix.p"), 'rb') as adj_file:
+        # (23417, 23417), scipy.sparse.csr.csr_matrix
         adj = pkl.load(adj_file)
+        print(adj)
+        print("Adj", adj.shape, type(adj))
+
     with open((path + "graph.p"), 'rb') as graph_file:
+        # Key: value list
         graph = pkl.load(graph_file)
-    with open((path + 'diffusion.p'), 'rb') as diff_file:
-        diffusion = pkl.load(diff_file)
+
+    if os.path.exists(path + 'diffusion.p'):
+        with open((path + 'diffusion.p'), 'rb') as diff_file:
+            diffusion = pkl.load(diff_file)
+            # diff_graph, diff_content
+            print(list(diffusion.values())[0])
+    else:
+        diffusion = None
+
     with open((path + 'link.csv'), 'r') as link_file:
         next(link_file)
         links = []
@@ -118,8 +134,11 @@ def load_data(path="data/dblp/", dataset="dblp", diffusion_threshold=10, from_te
     # idx_val = torch.LongTensor(idx_val)
     # idx_test = torch.LongTensor(idx_test)
 
-    diff = [(diff_graph, torch.from_numpy(diff_content).float()) for diff_graph, diff_content in list(diffusion.values())
-            if len(diff_graph) >= diffusion_threshold]
+    if diffusion is not None:
+        diff = [(diff_graph, torch.from_numpy(diff_content).float()) for diff_graph, diff_content in list(diffusion.values())
+                if len(diff_graph) >= diffusion_threshold]
+    else:
+        diff = []
 
     return adj, features, graph, old_adj, links, nonzero_nodes, diff
 
@@ -169,3 +188,6 @@ def sparse_to_tuple(sparse_mx):
         sparse_mx = to_tuple(sparse_mx)
 
     return sparse_mx
+
+if __name__ == '__main__':
+    load_data(path="../data/amazon/", dataset="amazon")
