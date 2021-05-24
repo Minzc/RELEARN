@@ -287,6 +287,35 @@ def train(args, embedding, Data, log_dir, logger, writer=None):
     logger.info(f'best test acc={best_acc:.2f} +- {best_std:2f} @ epoch:{int(best_epoch):d}')
     return best_acc
 
+def balance_label(labeled_data):
+    import random
+    seed = 2020
+    random.seed(seed)
+    # if args.dataset == 'amazon':
+    X_0 = []
+    Y_0 = []
+    X_1 = []
+    Y_1 = []
+    X_2 = []
+    Y_2 = []
+    for data1, data2, y in labeled_data:
+        if y == 1:
+            X_1.append((data1, data2))
+            Y_1.append(1)
+        elif y == 0:
+            X_0.append((data1, data2))
+            Y_0.append(0)
+        else:
+            X_2.append((data1, data2))
+            Y_2.append(2)
+    labeled_data = []
+    for data1, data2 in X_0:
+        labeled_data.append((data1, data2, 0))
+    for data1, data2 in X_1:
+        labeled_data.append((data1, data2, 1))
+    for data1, data2 in random.choices(X_2, k=len(X_0)):
+        labeled_data.append((data1, data2, 2))
+    return labeled_data
 
 if __name__ == '__main__':
     # Initialize args and seed
@@ -316,6 +345,12 @@ if __name__ == '__main__':
             labeled_data.append((data1, data2, label))
             labels.add(label)
             nodes.update([int(data1), int(data2)])
+
+    # =============================
+    # Balance label
+    labeled_data = balance_label(labeled_data)
+    # =============================
+
     shuffle(labeled_data)
     args.nodes = list(nodes)
     args.label_data = labeled_data
@@ -361,7 +396,9 @@ if __name__ == '__main__':
         adj = adj.to(args.device)
         embedding[i:i + len(nodes)] = torch.spmm(adj, features)
     duration = time.time() - t
-    logger.info(f'initialize embedding time {int(duration):d}')
+    # DBLP 23417, 300
+    # Amazon 6709, 6709
+    logger.info(f'initialize embedding time {int(duration):d} Initial Feature{embedding.shape}')
 
     # Train model
     t_total = time.time()
