@@ -193,14 +193,14 @@ def evaluate(args, embedding, logger, repeat_times=5):
                 # =============
                 # Test F1
                 # =============
-                best_test_macro_f1 = metrics.f1_score(y_test, preds, average="micro")
-                best_test_micro_f1 = metrics.f1_score(y_test, preds, average="macro")
+                best_test_macro_f1 = metrics.f1_score(y_test, preds, average="macro")
+                best_test_micro_f1 = metrics.f1_score(y_test, preds, average="micro")
 
                 # =============
                 # Train F1
                 # =============
-                best_train_macro_f1 = metrics.f1_score(y_train, train_pred, average="micro")
-                best_train_micro_f1 = metrics.f1_score(y_train, train_pred, average="macro")
+                best_train_macro_f1 = metrics.f1_score(y_train, train_pred, average="macro")
+                best_train_micro_f1 = metrics.f1_score(y_train, train_pred, average="micro")
             else:
                 count += 1
                 if count >= args.patience_eval:
