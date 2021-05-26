@@ -339,7 +339,7 @@ def train(args, embedding, Data, log_dir, logger, writer=None):
     logger.info(f"Best rest {best_rst}")
     return best_rst
 
-def balance_label(labeled_data):
+def balance_label(labeled_data, if_balance):
     import random
     seed = 2020
     random.seed(seed)
@@ -365,8 +365,12 @@ def balance_label(labeled_data):
         labeled_data.append((data1, data2, 0))
     for data1, data2 in X_1:
         labeled_data.append((data1, data2, 1))
-    for data1, data2 in random.choices(X_2, k=len(X_0)):
-        labeled_data.append((data1, data2, 2))
+    if if_balance == True:
+        for data1, data2 in random.choices(X_2, k=len(X_0)):
+            labeled_data.append((data1, data2, 2))
+    else:
+        for data1, data2 in X_2:
+            labeled_data.append((data1, data2, 2))
     return labeled_data
 
 if __name__ == '__main__':
@@ -401,7 +405,7 @@ if __name__ == '__main__':
 
     # =============================
     # Balance label
-    labeled_data = balance_label(labeled_data)
+    labeled_data = balance_label(labeled_data, if_balance=True)
     # =============================
 
     shuffle(labeled_data)
