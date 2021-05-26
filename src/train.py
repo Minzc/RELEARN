@@ -5,6 +5,8 @@ import os, sys
 import numpy as np
 from datetime import datetime
 from random import shuffle
+
+from sklearn import metrics
 from tqdm import trange
 import time
 import argparse
@@ -121,29 +123,20 @@ def parse_args():
 
     return parser.parse_args()
 
-
 def evaluate(args, embedding, logger, repeat_times=5):
     best_train_accs, best_test_accs = [], []
+    best_train_macro_f1s, best_test_macro_f1s = [], []
+    best_train_micro_f1s, best_test_micro_f1s = [], []
     best_train_acc_epochs, best_test_acc_epochs = [], []
+
     if args.use_superv:
-        # Have supervision on VAE, the training data is fixed
         train = construct_feature(args.train, embedding)
         test = construct_feature(args.test, embedding)
     else:
-        # No supervision on VAE, the training data is not fixed
         data = construct_feature(args.label_data, embedding)
         split = int(len(args.label_data) / repeat_times)
 
-        with open(f"data/{args.dataset}/edge_embeddings.txt", "w") as w:
-            for word1, word2, label in args.label_data:
-                vector1 = embedding[word1]
-                vector2 = embedding[word2]
-                embed = np.concatenate([vector1, vector2]).tolist()
-                record = {"x": embed, "y": label, "w_1": word1, "w_2": word2}
-                w.write(f"{json.dumps(record)}\n")
-            print(f"Edge embeddings are stored in data/{args.dataset}/edge_embeddings.txt")
-
-    # repeat 5 times
+    # repeat 5 times, 5 folder cross
     for i in range(repeat_times):
         if not args.use_superv:
             p1, p2 = i*split, (i+1)*split
@@ -167,6 +160,8 @@ def evaluate(args, embedding, logger, repeat_times=5):
         model = MLP(**kwargs).to(args.device)
         optimizer = torch.optim.Adam(model.parameters(), lr=args.lr_eval)
         best_test_acc, best_train_acc = 0, 0
+        best_test_macro_f1, best_train_macro_f1 = 0, 0
+        best_test_micro_f1, best_train_micro_f1 = 0, 0
         best_test_acc_epoch, best_train_acc_epoch = 0, 0
         count = 0
         # 1000 iterations for MLP model
@@ -177,6 +172,9 @@ def evaluate(args, embedding, logger, repeat_times=5):
                 loss.backward()
                 optimizer.step()
 
+            # =============
+            # Test accuracy
+            # =============
             preds, test_acc = model.predict(X_test, y_test)
             test_acc *= 100
             if test_acc > best_test_acc:
@@ -188,13 +186,25 @@ def evaluate(args, embedding, logger, repeat_times=5):
                 count += 1
                 if count >= args.patience_eval:
                     break
+            # =============
+            # Test F1
+            # =============
+            best_test_macro_f1 = max(best_test_macro_f1, metrics.f1_score(y_test, preds, average="micro"))
+            best_test_micro_f1 = max(best_test_micro_f1, metrics.f1_score(y_test, preds, average="macro"))
 
-            _, train_acc = model.predict(X_train, y_train)
+            # =============
+            # Train Accuracy
+            # =============
+            train_pred, train_acc = model.predict(X_train, y_train)
             train_acc *= 100
             if train_acc > best_train_acc:
                 best_train_acc = train_acc
                 best_train_acc_epoch = epoch + 1
-
+            # =============
+            # Train F1
+            # =============
+            best_train_macro_f1 = max(best_train_macro_f1, metrics.f1_score(y_train, train_pred, average="micro"))
+            best_train_micro_f1 = max(best_train_micro_f1, metrics.f1_score(y_train, train_pred, average="macro"))
             print('\repoch {}/{} train acc={:.4f}, test acc={:.4f}, best train acc={:.4f} @epoch:{:d}, best test acc={:.4f} @epoch:{:d}'.
                       format(epoch + 1, args.epochs_eval, train_acc, test_acc, best_train_acc, best_train_acc_epoch, best_test_acc, best_test_acc_epoch), end='')
             sys.stdout.flush()
@@ -205,13 +215,32 @@ def evaluate(args, embedding, logger, repeat_times=5):
         best_train_acc_epochs.append(best_train_acc_epoch)
         best_test_acc_epochs.append(best_test_acc_epoch)
 
+        best_train_macro_f1s.append(best_train_macro_f1)
+        best_test_macro_f1s.append(best_test_macro_f1)
+        best_train_micro_f1s.append(best_train_micro_f1)
+        best_test_micro_f1s.append(best_test_micro_f1)
+
     best_train_acc, best_train_acc_epoch, best_test_acc, best_test_acc_epoch = \
         np.mean(best_train_accs), np.mean(best_train_acc_epochs), np.mean(best_test_accs), np.mean(best_test_acc_epochs)
     std = np.std(best_test_accs)
     logger.info('{}: best train acc={:.2f} @epoch:{:d}, best test acc={:.2f} += {:.2f} @epoch:{:d}'.
                 format(args.eval_file, best_train_acc, int(best_train_acc_epoch), best_test_acc, std, int(best_test_acc_epoch)))
+    rst = {
+        "best_train_acc": np.mean(best_train_accs),
+        "best_train_acc_std": np.std(best_train_accs),
+        "best_train_macro_f1": np.mean(best_train_macro_f1s),
+        "best_train_macro_f1_std": np.std(best_train_macro_f1s),
+        "best_train_micro_f1": np.mean(best_train_micro_f1s),
+        "best_train_micro_f1_std": np.std(best_train_micro_f1s),
+        "best_test_acc": np.mean(best_test_accs),
+        "best_test_acc_std": np.std(best_test_accs),
+        "best_test_macro_f1": np.mean(best_test_macro_f1s),
+        "best_test_macro_f1_std": np.std(best_test_macro_f1s),
+        "best_test_micro_f1": np.mean(best_test_micro_f1s),
+        "best_test_micro_f1_std": np.std(best_test_micro_f1s),
+    }
+    return rst
 
-    return best_train_acc, best_test_acc, std
 
 
 def train(args, embedding, Data, log_dir, logger, writer=None):
@@ -243,6 +272,8 @@ def train(args, embedding, Data, log_dir, logger, writer=None):
     count = 0
     model.train()
 
+    best_rst = None
+
     for epoch in tqdm.tqdm(range(1, args.epochs+1), desc="Train Embedding"):
         losses = []
         for mode in args.modes:
@@ -270,7 +301,11 @@ def train(args, embedding, Data, log_dir, logger, writer=None):
             learned_embed = gensim.models.keyedvectors.Word2VecKeyedVectors(Data.feature_len)
             embedding = model.embedding(torch.LongTensor(args.nodes).to(args.device)).data.cpu().numpy()
             learned_embed.add([str(node) for node in args.nodes], embedding)
-            train_acc, test_acc, std = evaluate(args, learned_embed, logger)
+            rst = evaluate(args, learned_embed, logger)
+            train_acc = rst["best_train_acc"]
+            test_acc = rst["best_test_acc"]
+            std = rst["best_test_acc_std"]
+
             duration = time.time() - t
             logger.info('Epoch: {:04d} '.format(epoch)+
                         'train_acc: {:.2f} '.format(train_acc)+
@@ -291,6 +326,7 @@ def train(args, embedding, Data, log_dir, logger, writer=None):
                 }, log_dir,
                     f'epoch{epoch}_time{int(duration):d}_trainacc{train_acc:.2f}_testacc{test_acc:.2f}_std{std:.2f}.pth.tar', logger, True)
                 count = 0
+                best_rst = rst
             else:
                 if args.early_stop:
                     count += args.save_every
@@ -299,7 +335,8 @@ def train(args, embedding, Data, log_dir, logger, writer=None):
                     break
 
     logger.info(f'best test acc={best_acc:.2f} +- {best_std:2f} @ epoch:{int(best_epoch):d}')
-    return best_acc
+    logger.info(f"Best rest {best_rst}")
+    return best_rst
 
 def balance_label(labeled_data):
     import random

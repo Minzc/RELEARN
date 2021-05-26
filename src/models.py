@@ -12,6 +12,7 @@ class MLP(nn.Module):
         if layer==1:
             self.classifier = nn.Sequential(nn.Linear(input_dim, hidden_dim, bias=True),
                                             nn.ReLU(inplace=True),
+                                            nn.Dropout(),
                                             nn.Linear(hidden_dim, output_dim, bias=True))
         elif layer==2:
             self.classifier = nn.Sequential(nn.Linear(input_dim, hidden_dim, bias=True),
@@ -68,6 +69,7 @@ class GCNDecoder(nn.Module):
 
     def forward_encoder(self, x, adj, return_pair=True):
         h = F.relu(self.encoder(x, adj))
+        # Whether apply dropout based on whether the model is training
         h = F.dropout(h, self.dropout, training=self.training)
         if return_pair:
             h = h.view(-1, self.nhid)   # h_ij
