@@ -179,28 +179,28 @@ def evaluate(args, embedding, logger, repeat_times=5):
             test_acc *= 100
             train_pred, train_acc = model.predict(X_train, y_train)
             train_acc *= 100
+            # =============
+            # Train Accuracy
+            # =============
+            if train_acc > best_train_acc:
+                best_train_acc = train_acc
+                best_train_acc_epoch = epoch + 1
+
             if test_acc > best_test_acc:
                 best_test_acc = test_acc
                 best_test_acc_epoch = epoch + 1
-                best_pred = preds
                 count = 0
                 # =============
                 # Test F1
                 # =============
-                best_test_macro_f1 = max(best_test_macro_f1, metrics.f1_score(y_test, preds, average="micro"))
-                best_test_micro_f1 = max(best_test_micro_f1, metrics.f1_score(y_test, preds, average="macro"))
+                best_test_macro_f1 = metrics.f1_score(y_test, preds, average="micro")
+                best_test_micro_f1 = metrics.f1_score(y_test, preds, average="macro")
 
-                # =============
-                # Train Accuracy
-                # =============
-                if train_acc > best_train_acc:
-                    best_train_acc = train_acc
-                    best_train_acc_epoch = epoch + 1
                 # =============
                 # Train F1
                 # =============
-                best_train_macro_f1 = max(best_train_macro_f1, metrics.f1_score(y_train, train_pred, average="micro"))
-                best_train_micro_f1 = max(best_train_micro_f1, metrics.f1_score(y_train, train_pred, average="macro"))
+                best_train_macro_f1 = metrics.f1_score(y_train, train_pred, average="micro")
+                best_train_micro_f1 = metrics.f1_score(y_train, train_pred, average="macro")
             else:
                 count += 1
                 if count >= args.patience_eval:
